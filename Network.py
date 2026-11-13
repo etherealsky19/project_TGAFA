@@ -2,7 +2,6 @@ import torch.nn as nn
 from torch.nn.functional import normalize
 import torch
 
-from topology_attention import AttentionMechanism
 
 
 # from topology_attention import AttentionMechanism
@@ -65,7 +64,7 @@ class specificity_layer(nn.Module):
         return self.specificity_layer(x)
 
 class Network(nn.Module):
-    def __init__(self, view:int, dims:list[int], feature_dim:int, high_feature_dim:int, device):
+    def __init__(self, view:int, dims:list[int], feature_dim:int, high_feature_dim:int, spe_feature_dim:int,device):
         super(Network, self).__init__()
         self.view = view
         """
@@ -91,7 +90,7 @@ class Network(nn.Module):
         self.consistency_layers = nn.ModuleList(self.consistency_layers)
         #self.specificity_layers = nn.ModuleList(self.specificity_layers)
         self.specificity_layers = nn.Sequential(
-            nn.Linear(feature_dim, high_feature_dim)
+            nn.Linear(feature_dim, spe_feature_dim)
         )
         self.fusion_layer = nn.Sequential(
             nn.Linear(high_feature_dim*view, high_feature_dim),
@@ -99,8 +98,8 @@ class Network(nn.Module):
         # self.rc_layer = nn.Sequential(
         #     nn.Linear(high_feature_dim*2,feature_dim)
         # )
-        self.attention_mechanism = AttentionMechanism
-    def forward(self, xs:dict[int,torch.Tensor],attn=False):
+        #self.attention_mechanism = AttentionMechanism
+    def forward(self, xs:dict[int,torch.Tensor]):
         """
         前向传播计算各种特征
         Args:
@@ -131,6 +130,5 @@ class Network(nn.Module):
             ss.append(s)
         hc = torch.cat(hs,dim=1)
         cf = self.fusion_layer(hc)
-        if attn:
-            cf = self.attention_mechanism(cf,hs)
+        #cf_attn = self.attention_mechanism(cf,hs)
         return zs,hs,cf,xrs,ss

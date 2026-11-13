@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader
 import numpy as np
 import torch
 from torch.nn.functional import normalize
+from topology_attention import AttentionMechanism
 
 
 def cluster_acc(y_true, y_pred):
@@ -71,51 +72,27 @@ def evaluate(label, pred):
 
 
 
-def valid(model, device, dataset,batch_size,stage):
+@torch.no_grad()
+def valid(model, device, dataset, batch_size, stage):
     #nums = len(dataset)
-    test_loader = DataLoader(dataset,batch_size=batch_size,shuffle=True)
-    nums_classes = dataset.num_classes
-    nums_views = dataset.num_views
-    kmeans = KMeans(n_clusters=nums_classes, n_init=100)
-    # label = None  # 初始化真实标签
-    # pred = None
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    features, labels = [], []
+    for xs, y, _ in loader:
+        xs = {v: xs[v].to(device) for v in range(dataset.num_views)}
+        _, hs, cf, _, ss = model(xs)
+        cf_attn = AttentionMechanism(cf,hs)
+        feature = cf_attn
+        if stage == 2:
+            feature = torch.cat([normalize(cf_attn,dim=1)] + [normalize(s, dim=1) for s in ss], dim=1)
+            #feature = torch.cat([normalize(s, dim=1) for s in ss], dim=1)
+        features.append(feature.cpu())
+        labels.append(y.reshape(-1).cpu())
 
-
-    # ===================== 数据加载与前向传播 =====================
-    if stage == 1:
-        features, labels = [], []
-        with torch.no_grad():
-            for xs, y, _ in test_loader:
-                for v in range(nums_views):
-                    xs[v] = xs[v].to(device)
-                _, _, cf, _, _ = model(xs,True)
-                features.append(cf.cpu())
-                labels.append(y.cpu().reshape(-1))
-
-        fea = torch.cat(features, dim=0).numpy()
-        label = torch.cat(labels, dim=0).numpy()
-        pred = kmeans.fit_predict(fea)
-        nmi, ari, acc, pur = evaluate(label, pred)
-    if stage == 2:
-        features, labels = [], []
-        with torch.no_grad():
-            for xs, y, _ in test_loader:
-                for v in range(nums_views):
-                    xs[v] = xs[v].to(device)
-
-                _, _, cf, _, ss = model(xs,True)
-                for v in range(nums_views):
-                    ss[v] = normalize(ss[v],dim=1)
-                cfss = torch.cat([(normalize(cf,dim=1))] +ss, dim=1)
-                #cfss = torch.cat(ss, dim=1)
-                features.append(cfss.cpu())
-                labels.append(y.cpu().reshape(-1))
-
-        fea = torch.cat(features, dim=0).numpy()
-        label = torch.cat(labels, dim=0).numpy()
-        pred = kmeans.fit_predict(fea)
-        nmi, ari, acc, pur = evaluate(label, pred)
-
-    return nmi,ari,acc,pur
+    fea = torch.cat(features).numpy()
+    label = torch.cat(labels).numpy()
+    pred = KMeans(
+        n_clusters=dataset.num_classes, n_init=100
+    ).fit_predict(fea)
+    return evaluate(label, pred)
 
 

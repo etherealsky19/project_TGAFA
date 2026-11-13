@@ -29,9 +29,8 @@ def AttentionMechanism(cf:torch.Tensor, hs:list[torch.Tensor]):
     scale_topo = torch.sqrt(torch.tensor(b_dim, dtype=torch.float32, device=cf.device))
     attention_weights = []
     for v in range(view_count):
-        scores = torch.matmul(cf_topo, hs_topo[v].T) /scale_topo
-        # scores = torch.matmul(cf_topo, hs_topo[v].T)
-        attention_weights.append(F.softmax(scores, dim=1))
+        scores = F.softmax(torch.matmul(cf_topo, hs_topo[v].T) /scale_topo,dim=1)
+        attention_weights.append(scores)
     attention_weights = torch.stack(attention_weights,dim=0)
     attention_avg = attention_weights.mean(dim=0)
     cf_attn = torch.matmul(attention_avg,V)
